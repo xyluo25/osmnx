@@ -38,58 +38,25 @@ def _get_osm_filter(network_type):
     # define preset queries to send to the API. specifying way["highway"]
     # means that all ways returned must have a highway tag. the filters then
     # remove ways by tag/value.
-    filters = dict()
-
-    # driving: filter out un-drivable roads, service roads, private ways, and
-    # anything specifying motor=no. also filter out any non-service roads that
-    # are tagged as providing parking, driveway, private, or emergency-access
-    # services
-    filters["drive"] = (
-        f'["highway"]["area"!~"yes"]["highway"!~"cycleway|footway|path|pedestrian|steps|track|corridor|'
+    filters = {
+        "drive": f'["highway"]["area"!~"yes"]["highway"!~"cycleway|footway|path|pedestrian|steps|track|corridor|'
         f'elevator|escalator|proposed|construction|bridleway|abandoned|platform|raceway|service"]'
         f'["motor_vehicle"!~"no"]["motorcar"!~"no"]{settings.default_access}'
-        f'["service"!~"parking|parking_aisle|driveway|private|emergency_access"]'
-    )
-
-    # drive+service: allow ways tagged 'service' but filter out certain types of
-    # service ways
-    filters["drive_service"] = (
-        f'["highway"]["area"!~"yes"]["highway"!~"cycleway|footway|path|pedestrian|steps|track|'
+        f'["service"!~"parking|parking_aisle|driveway|private|emergency_access"]',
+        "drive_service": f'["highway"]["area"!~"yes"]["highway"!~"cycleway|footway|path|pedestrian|steps|track|'
         f'corridor|elevator|escalator|proposed|construction|bridleway|abandoned|platform|raceway"]'
         f'["motor_vehicle"!~"no"]["motorcar"!~"no"]{settings.default_access}'
-        f'["service"!~"parking|parking_aisle|private|emergency_access"]'
-    )
-
-    # walking: filter out cycle ways, motor ways, private ways, and anything
-    # specifying foot=no. allow service roads, permitting things like parking
-    # lot lanes, alleys, etc that you *can* walk on even if they're not exactly
-    # pleasant walks. some cycleways may allow pedestrians, but this filter ignores
-    # such cycleways.
-    filters["walk"] = (
-        f'["highway"]["area"!~"yes"]["highway"!~"cycleway|motor|proposed|construction|abandoned|'
-        f'platform|raceway"]["foot"!~"no"]["service"!~"private"]{settings.default_access}'
-    )
-
-    # biking: filter out foot ways, motor ways, private ways, and anything
-    # specifying biking=no
-    filters["bike"] = (
-        f'["highway"]["area"!~"yes"]["highway"!~"footway|steps|corridor|elevator|'
+        f'["service"!~"parking|parking_aisle|private|emergency_access"]',
+        "walk": f'["highway"]["area"!~"yes"]["highway"!~"cycleway|motor|proposed|construction|abandoned|'
+        f'platform|raceway"]["foot"!~"no"]["service"!~"private"]{settings.default_access}',
+        "bike": f'["highway"]["area"!~"yes"]["highway"!~"footway|steps|corridor|elevator|'
         f'escalator|motor|proposed|construction|abandoned|platform|raceway"]'
-        f'["bicycle"!~"no"]["service"!~"private"]{settings.default_access}'
-    )
+        f'["bicycle"!~"no"]["service"!~"private"]{settings.default_access}',
+        "all": f'["highway"]["area"!~"yes"]["highway"!~"proposed|construction|abandoned|platform|raceway"]'
+        f'["service"!~"private"]{settings.default_access}',
+        "all_private": '["highway"]["area"!~"yes"]["highway"!~"proposed|construction|abandoned|platform|raceway"]',
+    }
 
-    # to download all ways, just filter out everything not currently in use or
-    # that is private-access only
-    filters["all"] = (
-        f'["highway"]["area"!~"yes"]["highway"!~"proposed|construction|abandoned|platform|raceway"]'
-        f'["service"!~"private"]{settings.default_access}'
-    )
-
-    # to download all ways, including private-access ones, just filter out
-    # everything not currently in use
-    filters[
-        "all_private"
-    ] = '["highway"]["area"!~"yes"]["highway"!~"proposed|construction|abandoned|platform|raceway"]'
 
     if network_type in filters:
         osm_filter = filters[network_type]
@@ -175,10 +142,7 @@ def _url_in_cache(url):
     filepath = os.path.join(settings.cache_folder, os.extsep.join([filename, "json"]))
 
     # if this file exists in the cache, return its full path
-    if os.path.isfile(filepath):
-        return filepath
-    else:
-        return None
+    return filepath if os.path.isfile(filepath) else None
 
 
 def _retrieve_from_cache(url, check_remark=False):
@@ -317,10 +281,7 @@ def _make_overpass_settings():
     -------
     string
     """
-    if settings.memory is None:
-        maxsize = ""
-    else:
-        maxsize = f"[maxsize:{settings.memory}]"
+    maxsize = "" if settings.memory is None else f"[maxsize:{settings.memory}]"
     return settings.overpass_settings.format(timeout=settings.timeout, maxsize=maxsize)
 
 
@@ -373,7 +334,7 @@ def _create_overpass_query(polygon_coord_str, tags):
     if not isinstance(tags, dict):
         raise TypeError(error_msg)
 
-    tags_dict = dict()
+    tags_dict = {}
     for key, value in tags.items():
 
         if isinstance(value, bool):
@@ -396,9 +357,7 @@ def _create_overpass_query(polygon_coord_str, tags):
         if isinstance(value, bool):
             tags_list.append({key: value})
         else:
-            for value_item in value:
-                tags_list.append({key: value_item})
-
+            tags_list.extend({key: value_item} for value_item in value)
     # add node/way/relation query components one at a time
     components = []
     for d in tags_list:
@@ -411,14 +370,13 @@ def _create_overpass_query(polygon_coord_str, tags):
                 # otherwise, pass "key"="value"
                 tag_str = f"['{key}'='{value}'](poly:'{polygon_coord_str}');(._;>;);"
 
-            for kind in ("node", "way", "relation"):
-                components.append(f"({kind}{tag_str});")
+            components.extend(
+                f"({kind}{tag_str});" for kind in ("node", "way", "relation")
+            )
 
     # finalize query and return
     components = "".join(components)
-    query = f"{overpass_settings};({components});out;"
-
-    return query
+    return f"{overpass_settings};({components});out;"
 
 
 def _osm_net_download(polygon, network_type, custom_filter):
@@ -540,9 +498,7 @@ def _osm_polygon_download(query, limit=1, polygon_geojson=1):
     else:
         raise TypeError("query must be a dict or a string")
 
-    # request the URL, return the JSON
-    response_json = nominatim_request(params=params)
-    return response_json
+    return nominatim_request(params=params)
 
 
 def nominatim_request(params, request_type="search", pause=1, error_pause=60):
@@ -580,41 +536,40 @@ def nominatim_request(params, request_type="search", pause=1, error_pause=60):
         # found response in the cache, return it instead of calling server
         return cached_response_json
 
-    else:
-        # if this URL is not already in the cache, pause, then request it
-        utils.log(f"Pausing {pause} seconds before making HTTP GET request")
-        time.sleep(pause)
+    # if this URL is not already in the cache, pause, then request it
+    utils.log(f"Pausing {pause} seconds before making HTTP GET request")
+    time.sleep(pause)
 
-        # transmit the HTTP GET request
-        utils.log(f"Get {prepared_url} with timeout={settings.timeout}")
-        headers = _get_http_headers()
-        response = requests.get(url, params=params, timeout=settings.timeout, headers=headers)
-        sc = response.status_code
+    # transmit the HTTP GET request
+    utils.log(f"Get {prepared_url} with timeout={settings.timeout}")
+    headers = _get_http_headers()
+    response = requests.get(url, params=params, timeout=settings.timeout, headers=headers)
+    sc = response.status_code
 
-        # log the response size and domain
-        size_kb = len(response.content) / 1000.0
-        domain = re.findall(r"(?s)//(.*?)/", url)[0]
-        utils.log(f"Downloaded {size_kb:,.1f}KB from {domain}")
+    # log the response size and domain
+    size_kb = len(response.content) / 1000.0
+    domain = re.findall(r"(?s)//(.*?)/", url)[0]
+    utils.log(f"Downloaded {size_kb:,.1f}KB from {domain}")
 
-        try:
-            response_json = response.json()
+    try:
+        response_json = response.json()
 
-        except Exception:  # pragma: no cover
-            if sc in {429, 504}:
-                # 429 is 'too many requests' and 504 is 'gateway timeout' from
-                # server overload: handle these by pausing then recursively
-                # re-trying until we get a valid response from the server
-                utils.log(f"{domain} returned {sc}: retry in {error_pause} secs", level=lg.WARNING)
-                time.sleep(error_pause)
-                response_json = nominatim_request(params, request_type, pause, error_pause)
+    except Exception:  # pragma: no cover
+        if sc in {429, 504}:
+            # 429 is 'too many requests' and 504 is 'gateway timeout' from
+            # server overload: handle these by pausing then recursively
+            # re-trying until we get a valid response from the server
+            utils.log(f"{domain} returned {sc}: retry in {error_pause} secs", level=lg.WARNING)
+            time.sleep(error_pause)
+            response_json = nominatim_request(params, request_type, pause, error_pause)
 
-            else:
-                # else, this was an unhandled status code, throw an exception
-                utils.log(f"{domain} returned {sc}", level=lg.ERROR)
-                raise Exception(f"Server returned:\n{response} {response.reason}\n{response.text}")
+        else:
+            # else, this was an unhandled status code, throw an exception
+            utils.log(f"{domain} returned {sc}", level=lg.ERROR)
+            raise Exception(f"Server returned:\n{response} {response.reason}\n{response.text}")
 
-        _save_to_cache(prepared_url, response_json, sc)
-        return response_json
+    _save_to_cache(prepared_url, response_json, sc)
+    return response_json
 
 
 def overpass_request(data, pause=None, error_pause=60):
@@ -646,46 +601,45 @@ def overpass_request(data, pause=None, error_pause=60):
         # found response in the cache, return it instead of calling server
         return cached_response_json
 
-    else:
-        # if this URL is not already in the cache, pause, then request it
-        if pause is None:
-            this_pause = _get_pause()
-        utils.log(f"Pausing {this_pause} seconds before making HTTP POST request")
-        time.sleep(this_pause)
+    # if this URL is not already in the cache, pause, then request it
+    if pause is None:
+        this_pause = _get_pause()
+    utils.log(f"Pausing {this_pause} seconds before making HTTP POST request")
+    time.sleep(this_pause)
 
-        # transmit the HTTP POST request
-        utils.log(f"Post {prepared_url} with timeout={settings.timeout}")
-        headers = _get_http_headers()
-        response = requests.post(url, data=data, timeout=settings.timeout, headers=headers)
-        sc = response.status_code
+    # transmit the HTTP POST request
+    utils.log(f"Post {prepared_url} with timeout={settings.timeout}")
+    headers = _get_http_headers()
+    response = requests.post(url, data=data, timeout=settings.timeout, headers=headers)
+    sc = response.status_code
 
-        # log the response size and domain
-        size_kb = len(response.content) / 1000.0
-        domain = re.findall(r"(?s)//(.*?)/", url)[0]
-        utils.log(f"Downloaded {size_kb:,.1f}KB from {domain}")
+    # log the response size and domain
+    size_kb = len(response.content) / 1000.0
+    domain = re.findall(r"(?s)//(.*?)/", url)[0]
+    utils.log(f"Downloaded {size_kb:,.1f}KB from {domain}")
 
-        try:
-            response_json = response.json()
-            if "remark" in response_json:
-                utils.log(f'Server remark: "{response_json["remark"]}"', level=lg.WARNING)
+    try:
+        response_json = response.json()
+        if "remark" in response_json:
+            utils.log(f'Server remark: "{response_json["remark"]}"', level=lg.WARNING)
 
-        except Exception:  # pragma: no cover
-            if sc in {429, 504}:
-                # 429 is 'too many requests' and 504 is 'gateway timeout' from
-                # server overload: handle these by pausing then recursively
-                # re-trying until we get a valid response from the server
-                this_pause = error_pause + _get_pause()
-                utils.log(f"{domain} returned {sc}: retry in {this_pause} secs", level=lg.WARNING)
-                time.sleep(this_pause)
-                response_json = overpass_request(data, pause, error_pause)
+    except Exception:  # pragma: no cover
+        if sc in {429, 504}:
+            # 429 is 'too many requests' and 504 is 'gateway timeout' from
+            # server overload: handle these by pausing then recursively
+            # re-trying until we get a valid response from the server
+            this_pause = error_pause + _get_pause()
+            utils.log(f"{domain} returned {sc}: retry in {this_pause} secs", level=lg.WARNING)
+            time.sleep(this_pause)
+            response_json = overpass_request(data, pause, error_pause)
 
-            else:
-                # else, this was an unhandled status code, throw an exception
-                utils.log(f"{domain} returned {sc}", level=lg.ERROR)
-                raise Exception(f"Server returned\n{response} {response.reason}\n{response.text}")
+        else:
+            # else, this was an unhandled status code, throw an exception
+            utils.log(f"{domain} returned {sc}", level=lg.ERROR)
+            raise Exception(f"Server returned\n{response} {response.reason}\n{response.text}")
 
-        _save_to_cache(prepared_url, response_json, sc)
-        return response_json
+    _save_to_cache(prepared_url, response_json, sc)
+    return response_json
 
 
 def _overpass_json_from_file(filepath):
@@ -704,11 +658,7 @@ def _overpass_json_from_file(filepath):
 
     def _opener(filepath):
         _, ext = os.path.splitext(filepath)
-        if ext == ".bz2":
-            return bz2.BZ2File(filepath)
-        else:
-            # assume an unrecognized file extension is just XML
-            return open(filepath, mode="rb")
+        return bz2.BZ2File(filepath) if ext == ".bz2" else open(filepath, mode="rb")
 
     with _opener(filepath) as file:
         handler = _OSMContentHandler()
@@ -734,10 +684,10 @@ class _OSMContentHandler(xml.sax.handler.ContentHandler):
             self.object.update({k: attrs[k] for k in attrs.keys() if k in {"version", "generator"}})
 
         elif name in {"node", "way"}:
-            self._element = dict(type=name, tags={}, nodes=[], **attrs)
-            self._element.update({k: float(attrs[k]) for k in attrs.keys() if k in {"lat", "lon"}})
-            self._element.update(
-                {
+            self._element = (
+                dict(type=name, tags={}, nodes=[], **attrs)
+                | {k: float(attrs[k]) for k in attrs.keys() if k in {"lat", "lon"}}
+                | {
                     k: int(attrs[k])
                     for k in attrs.keys()
                     if k in {"id", "uid", "version", "changeset"}
@@ -745,14 +695,11 @@ class _OSMContentHandler(xml.sax.handler.ContentHandler):
             )
 
         elif name == "relation":
-            self._element = dict(type=name, tags={}, members=[], **attrs)
-            self._element.update(
-                {
-                    k: int(attrs[k])
-                    for k in attrs.keys()
-                    if k in {"id", "uid", "version", "changeset"}
-                }
-            )
+            self._element = dict(type=name, tags={}, members=[], **attrs) | {
+                k: int(attrs[k])
+                for k in attrs.keys()
+                if k in {"id", "uid", "version", "changeset"}
+            }
 
         elif name == "tag":
             self._element["tags"].update({attrs["k"]: attrs["v"]})

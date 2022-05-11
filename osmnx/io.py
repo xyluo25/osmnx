@@ -38,7 +38,7 @@ def save_graph_geopackage(G, filepath=None, encoding="utf-8"):
 
     # if save folder does not already exist, create it
     folder, filename = os.path.split(filepath)
-    if not folder == "" and not os.path.exists(folder):
+    if folder != "" and not os.path.exists(folder):
         os.makedirs(folder)
 
     # convert undirected graph to gdfs and stringify non-numeric columns
@@ -80,7 +80,7 @@ def save_graph_shapefile(G, filepath=None, encoding="utf-8"):
 
     # if save folder does not already exist, create it (shapefiles
     # get saved as set of files)
-    if not filepath == "" and not os.path.exists(filepath):
+    if filepath != "" and not os.path.exists(filepath):
         os.makedirs(filepath)
     filepath_nodes = os.path.join(filepath, "nodes.shp")
     filepath_edges = os.path.join(filepath, "edges.shp")
@@ -123,7 +123,7 @@ def save_graphml(G, filepath=None, gephi=False, encoding="utf-8"):
 
     # if save folder does not already exist, create it
     folder, filename = os.path.split(filepath)
-    if not folder == "" and not os.path.exists(folder):
+    if folder != "" and not os.path.exists(folder):
         os.makedirs(folder)
 
     # make a copy to not edit the original graph object the caller passed in
@@ -142,7 +142,7 @@ def save_graphml(G, filepath=None, gephi=False, encoding="utf-8"):
         G = utils_graph.graph_from_gdfs(gdf_nodes, gdf_edges)
 
         # remove graph attributes as Gephi only accepts node and edge attrs
-        G.graph = dict()
+        G.graph = {}
 
     else:
         # if not gephi, keep graph attrs and stringify them
@@ -345,7 +345,7 @@ def _stringify_nonnumeric_cols(gdf):
         gdf with non-numeric columns stringified
     """
     # stringify every non-numeric column other than geometry column
-    for col in (c for c in gdf.columns if not c == "geometry"):
+    for col in (c for c in gdf.columns if c != "geometry"):
         if not pd.api.types.is_numeric_dtype(gdf[col]):
             gdf[col] = gdf[col].fillna("").astype(str)
 
@@ -432,7 +432,7 @@ def save_graph_xml(
 
     # if save folder does not already exist, create it
     folder, filename = os.path.split(filepath)
-    if not folder == "" and not os.path.exists(folder):
+    if folder != "" and not os.path.exists(folder):
         os.makedirs(folder)
 
     if not settings.all_oneway:

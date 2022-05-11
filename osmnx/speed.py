@@ -139,12 +139,10 @@ def add_edge_travel_times(G, precision=1):
     """
     edges = utils_graph.graph_to_gdfs(G, nodes=False)
 
-    # verify edge length and speed_kph attributes exist and contain no nulls
-    if not ("length" in edges.columns and "speed_kph" in edges.columns):
+    if "length" not in edges.columns or "speed_kph" not in edges.columns:
         raise KeyError("all edges must have `length` and `speed_kph` attributes.")
-    else:
-        if pd.isnull(edges["length"]).any() or pd.isnull(edges["speed_kph"]).any():
-            raise ValueError("edge `length` and `speed_kph` values must be non-null.")
+    if pd.isnull(edges["length"]).any() or pd.isnull(edges["speed_kph"]).any():
+        raise ValueError("edge `length` and `speed_kph` values must be non-null.")
 
     # convert distance km to meters, and speed km per hour to km per second
     distance_km = edges["length"] / 1000
@@ -183,7 +181,7 @@ def _clean_maxspeed(value, convert_mph=True):
         # strip out everything but numbers, periods, commas, semicolons
         value_clean = float(re.sub(pattern, "", value).replace(",", "."))
         if convert_mph and "mph" in value.lower():
-            value_clean = value_clean * MPH_TO_KPH
+            value_clean *= MPH_TO_KPH
         return value_clean
 
     except ValueError:
@@ -205,16 +203,13 @@ def _collapse_multiple_maxspeed_values(value):
         an integer representation of the mean value in the list, converted
         to kph if original value was in mph.
     """
-    # if this isn't a list, just return it right back to the caller
     if not isinstance(value, list):
         return value
 
-    else:
-        try:
-            # clean each value in list and convert to kph if it is mph then
-            # return mean value
-            values = [_clean_maxspeed(x) for x in value]
-            mean_value = int(pd.Series(values).dropna().mean())
-            return mean_value
-        except ValueError:
-            return None
+    try:
+        # clean each value in list and convert to kph if it is mph then
+        # return mean value
+        values = [_clean_maxspeed(x) for x in value]
+        return int(pd.Series(values).dropna().mean())
+    except ValueError:
+        return None

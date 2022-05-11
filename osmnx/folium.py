@@ -44,7 +44,7 @@ def _make_folium_polyline(
     # locations is a list of points for the polyline
     # folium takes coords in lat,lon but geopandas provides them in lon,lat
     # so we have to flip them around
-    locations = list([(lat, lng) for lng, lat in edge["geometry"].coords])
+    locations = [(lat, lng) for lng, lat in edge["geometry"].coords]
 
     # if popup_attribute is None, then create no pop-up
     if popup_attribute is None:
@@ -55,8 +55,7 @@ def _make_folium_polyline(
         popup_text = json.dumps(edge[popup_attribute])
         popup = folium.Popup(html=popup_text)
 
-    # create a folium polyline with attributes
-    pl = folium.PolyLine(
+    return folium.PolyLine(
         locations=locations,
         popup=popup,
         color=edge_color,
@@ -64,7 +63,6 @@ def _make_folium_polyline(
         opacity=edge_opacity,
         **kwargs,
     )
-    return pl
 
 
 def plot_graph_folium(

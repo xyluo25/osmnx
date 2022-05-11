@@ -288,7 +288,7 @@ def count_streets_per_node(G, nodes=None):
     all_unique_edges = set(all_edges)
 
     # get all edges (including parallel edges) that are not self-loops
-    non_self_loop_edges = [e for e in all_edges if not e[0] == e[1]]
+    non_self_loop_edges = [e for e in all_edges if e[0] != e[1]]
 
     # get a single copy of each self-loop edge (ie, if it's bi-directional, we
     # ignore the parallel edge going the reverse direction and keep only one
@@ -346,8 +346,6 @@ def _is_duplicate_edge(data, data_other):
     -------
     is_dupe : bool
     """
-    is_dupe = False
-
     # if either edge's OSM ID contains multiple values (due to simplification), we want
     # to compare as sets so they are order-invariant, otherwise uv does not match vu
     osmid = set(data["osmid"]) if isinstance(data["osmid"], list) else data["osmid"]
@@ -355,21 +353,12 @@ def _is_duplicate_edge(data, data_other):
         set(data_other["osmid"]) if isinstance(data_other["osmid"], list) else data_other["osmid"]
     )
 
-    if osmid == osmid_other:
-        # if they contain the same OSM ID or set of OSM IDs (due to simplification)
-        if ("geometry" in data) and ("geometry" in data_other):
-            # if both edges have a geometry attribute
-            if _is_same_geometry(data["geometry"], data_other["geometry"]):
-                # if their edge geometries have the same coordinates
-                is_dupe = True
-        elif ("geometry" in data) and ("geometry" in data_other):
-            # if neither edge has a geometry attribute
-            is_dupe = True
-        else:
-            # if one edge has geometry attribute but the other doesn't, keep it
-            pass
-
-    return is_dupe
+    return bool(
+        osmid == osmid_other
+        and ("geometry" in data)
+        and ("geometry" in data_other)
+        and _is_same_geometry(data["geometry"], data_other["geometry"])
+    )
 
 
 def _is_same_geometry(ls1, ls2):
@@ -445,14 +434,11 @@ def _update_edge_keys(G):
             geom_pairs = [(group["geometry"].iloc[0], group["geometry"].iloc[1])]
 
         # for each pair of edges to compare
-        for geom1, geom2 in geom_pairs:
-            # if they don't have the same geometry, flag them as different streets
-            if not _is_same_geometry(geom1, geom2):
-                # add edge uvk, but not edge vuk, otherwise we'll iterate both their keys
-                # and they'll still duplicate each other at the end of this process
-                different_streets.append(
-                    (group["u"].iloc[0], group["v"].iloc[0], group["key"].iloc[0])
-                )
+        different_streets.extend(
+            (group["u"].iloc[0], group["v"].iloc[0], group["key"].iloc[0])
+            for geom1, geom2 in geom_pairs
+            if not _is_same_geometry(geom1, geom2)
+        )
 
     # for each unique different street, iterate its key + 1 so it's unique
     for u, v, k in set(different_streets):
@@ -547,13 +533,13 @@ def get_undirected(G):
     for u, v, key, data in H.edges(keys=True, data=True):
 
         # if we haven't already flagged this edge as a duplicate
-        if not (u, v, key) in duplicate_edges:
+        if (u, v, key) not in duplicate_edges:
 
             # look at every other edge between u and v, one at a time
             for key_other in H[u][v]:
 
                 # don't compare this edge to itself
-                if not key_other == key:
+                if key_other != key:
 
                     # compare the first edge's data to the second's to see if
                     # they are duplicates

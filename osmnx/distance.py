@@ -63,9 +63,7 @@ def great_circle_vec(lat1, lng1, lat2, lng2, earth_radius=6371009):
 
     arc = 2 * np.arcsin(np.sqrt(h))
 
-    # return distance in units of earth_radius
-    dist = arc * earth_radius
-    return dist
+    return arc * earth_radius
 
 
 def euclidean_dist_vec(y1, x1, y2, x2):
@@ -93,9 +91,7 @@ def euclidean_dist_vec(y1, x1, y2, x2):
         distance or array of distances from (x1, y1) to (x2, y2) in
         coordinates' units
     """
-    # Pythagorean theorem
-    dist = ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
-    return dist
+    return ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
 
 
 def get_nearest_node(G, point, method="haversine", return_dist=False):
@@ -159,10 +155,7 @@ def get_nearest_node(G, point, method="haversine", return_dist=False):
 
     # if caller requested return_dist, return distance between the point and the
     # nearest node as well
-    if return_dist:
-        return nearest_node, dists.loc[nearest_node]
-    else:
-        return nearest_node
+    return (nearest_node, dists.loc[nearest_node]) if return_dist else nearest_node
 
 
 def get_nearest_edge(G, point, return_geom=False, return_dist=False):
@@ -479,8 +472,7 @@ def shortest_path(G, orig, dest, weight="length"):
     path : list
         list of node IDs consituting the shortest path
     """
-    path = nx.shortest_path(G, orig, dest, weight=weight)
-    return path
+    return nx.shortest_path(G, orig, dest, weight=weight)
 
 
 def k_shortest_paths(G, orig, dest, k, weight="length"):
@@ -510,5 +502,4 @@ def k_shortest_paths(G, orig, dest, k, weight="length"):
         a list of node IDs.
     """
     paths_gen = nx.shortest_simple_paths(utils_graph.get_digraph(G, weight), orig, dest, weight)
-    for path in itertools.islice(paths_gen, 0, k):
-        yield path
+    yield from itertools.islice(paths_gen, 0, k)

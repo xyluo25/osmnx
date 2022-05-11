@@ -80,7 +80,6 @@ def basic_stats(G, area=None, clean_intersects=False, tolerance=15, circuity_dis
           - clean_intersection_density_km = clean_intersection_count divided by
                 area in square kilometers
     """
-    sq_m_in_sq_km = 1e6  # there are 1 million sq meters in 1 sq km
     Gu = None
 
     # calculate the number of nodes, n, and the number of edges, m, in the graph
@@ -123,14 +122,14 @@ def basic_stats(G, area=None, clean_intersects=False, tolerance=15, circuity_dis
     spnp = {num: count / n for num, count in spnc.items()}
 
     # calculate the total and average edge lengths
-    edge_length_total = sum([d["length"] for u, v, d in G.edges(data=True)])
+    edge_length_total = sum(d["length"] for u, v, d in G.edges(data=True))
     edge_length_avg = edge_length_total / m
 
     # calculate the total and average street segment lengths (so, edges without
     # double-counting two-way streets)
     if Gu is None:
         Gu = utils_graph.get_undirected(G)
-    street_length_total = sum([d["length"] for u, v, d in Gu.edges(data=True)])
+    street_length_total = sum(d["length"] for u, v, d in Gu.edges(data=True))
     street_segments_count = len(Gu.edges(keys=True))
     street_length_avg = street_length_total / street_segments_count
 
@@ -143,6 +142,7 @@ def basic_stats(G, area=None, clean_intersects=False, tolerance=15, circuity_dis
 
     # we can calculate density metrics only if area is not null
     if area is not None:
+        sq_m_in_sq_km = 1e6  # there are 1 million sq meters in 1 sq km
         area_km = area / sq_m_in_sq_km
 
         # calculate node density as nodes per sq km
@@ -206,8 +206,8 @@ def basic_stats(G, area=None, clean_intersects=False, tolerance=15, circuity_dis
     self_loops_count = len(self_loops)
     self_loop_proportion = self_loops_count / m
 
-    # assemble the results
-    stats = {
+    # return the results
+    return {
         "n": n,
         "m": m,
         "k_avg": k_avg,
@@ -229,9 +229,6 @@ def basic_stats(G, area=None, clean_intersects=False, tolerance=15, circuity_dis
         "clean_intersection_count": clean_intersection_count,
         "clean_intersection_density_km": clean_intersection_density_km,
     }
-
-    # return the results
-    return stats
 
 
 def extended_stats(G, connectivity=False, anc=False, ecc=False, bc=False, cc=False):

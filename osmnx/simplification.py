@@ -49,13 +49,11 @@ def _is_endpoint(G, node, strict=True):
         # this is always an endpoint.
         return True
 
-    # rule 2
     elif G.out_degree(node) == 0 or G.in_degree(node) == 0:
         # if node has no incoming edges or no outgoing edges, it is an endpoint
         return True
 
-    # rule 3
-    elif not (n == 2 and (d == 2 or d == 4)):
+    elif n != 2 or d not in [2, 4]:
         # else, if it does NOT have 2 neighbors AND either 2 or 4 directed
         # edges, it is an endpoint. either it has 1 or 3+ neighbors, in which
         # case it is a dead-end or an intersection of multiple streets or it has
@@ -64,26 +62,20 @@ def _is_endpoint(G, node, strict=True):
         # endpoint
         return True
 
-    # rule 4
     elif not strict:
         # non-strict mode: do its incident edges have different OSM IDs?
         osmids = []
 
         # add all the edge OSM IDs for incoming edges
         for u in G.predecessors(node):
-            for key in G[u][node]:
-                osmids.append(G.edges[u, node, key]["osmid"])
-
+            osmids.extend(G.edges[u, node, key]["osmid"] for key in G[u][node])
         # add all the edge OSM IDs for outgoing edges
         for v in G.successors(node):
-            for key in G[node][v]:
-                osmids.append(G.edges[node, v, key]["osmid"])
-
+            osmids.extend(G.edges[node, v, key]["osmid"] for key in G[node][v])
         # if there is more than 1 OSM ID in the list of edge OSM IDs then it is
         # an endpoint, if not, it isn't
         return len(set(osmids)) > 1
 
-    # if none of the preceding rules returned true, then it is not an endpoint
     else:
         return False
 
@@ -129,20 +121,18 @@ def _build_path(G, endpoint, endpoint_successor, endpoints):
                     successor = successors[0]
                     path.append(successor)
 
-                # handle relatively rare cases or OSM digitization quirks
-                elif len(successors) == 0:
+                elif not successors:
                     if endpoint in G.successors(successor):
                         # we have come to the end of a self-looping edge, so
                         # add first node to end of path to close it and return
                         return path + [endpoint]
-                    else:
-                        # this can happen due to OSM digitization error where
-                        # a one-way street turns into a two-way here, but
-                        # duplicate incoming one-way edges are present
-                        utils.log(
-                            f"Unexpected simplify pattern handled near {successor}", level=lg.WARN
-                        )
-                        return path
+                    # this can happen due to OSM digitization error where
+                    # a one-way street turns into a two-way here, but
+                    # duplicate incoming one-way edges are present
+                    utils.log(
+                        f"Unexpected simplify pattern handled near {successor}", level=lg.WARN
+                    )
+                    return path
                 else:
                     # if successor has >1 successors, then successor must have
                     # been an endpoint because you can go in 2 new directions.
@@ -177,7 +167,7 @@ def _get_paths_to_simplify(G, strict=True):
     path_to_simplify : list
     """
     # first identify all the nodes that are endpoints
-    endpoints = set([n for n in G.nodes() if _is_endpoint(G, n, strict=strict)])
+    endpoints = {n for n in G.nodes() if _is_endpoint(G, n, strict=strict)}
     utils.log(f"Identified {len(endpoints)} edge endpoints")
 
     # for each endpoint node, look at each of its successor nodes
@@ -251,13 +241,13 @@ def simplify_graph(G, strict=True, remove_rings=True):
 
         # add the interstitial edges we're removing to a list so we can retain
         # their spatial geometry
-        edge_attributes = dict()
+        edge_attributes = {}
         for u, v in zip(path[:-1], path[1:]):
 
             # there should rarely be multiple edges between interstitial nodes
             # usually happens if OSM has duplicate ways digitized for just one
             # street... we will keep only one of the edges (see below)
-            if not G.number_of_edges(u, v) == 1:
+            if G.number_of_edges(u, v) != 1:
                 utils.log(f"Found multiple edges between {u} and {v} when simplifying")
 
             # get edge between these nodes: if multiple edges exist between
@@ -275,11 +265,11 @@ def simplify_graph(G, strict=True, remove_rings=True):
 
         for key in edge_attributes:
             # don't touch the length attribute, we'll sum it at the end
-            if len(set(edge_attributes[key])) == 1 and not key == "length":
+            if len(set(edge_attributes[key])) == 1 and key != "length":
                 # if there's only 1 unique value in this attribute list,
                 # consolidate it to the single value (the zero-th)
                 edge_attributes[key] = edge_attributes[key][0]
-            elif not key == "length":
+            elif key != "length":
                 # otherwise, if there are multiple values, keep one of each value
                 edge_attributes[key] = list(set(edge_attributes[key]))
 
@@ -309,7 +299,7 @@ def simplify_graph(G, strict=True, remove_rings=True):
         wccs = nx.weakly_connected_components(G)
         nodes_in_rings = set()
         for wcc in wccs:
-            if all([not _is_endpoint(G, n) for n in wcc]):
+            if all(not _is_endpoint(G, n) for n in wcc):
                 nodes_in_rings.update(wcc)
         G.remove_nodes_from(nodes_in_rings)
 
@@ -397,30 +387,26 @@ def consolidate_intersections(
         G.remove_nodes_from(dead_end_nodes)
 
     if rebuild_graph:
-        if len(G) == 0 or len(G.edges) == 0:
-            # cannot rebuild a graph with no nodes or no edges, just return it
-            return G
-        else:
-            return _consolidate_intersections_rebuild_graph(
+        return (
+            G
+            if len(G) == 0 or len(G.edges) == 0
+            else _consolidate_intersections_rebuild_graph(
                 G=G, tolerance=tolerance, reconnect_edges=reconnect_edges
             )
+        )
 
-    else:
-        crs = G.graph["crs"]
-        if len(G) == 0:
-            # if graph has no nodes, just return empty GeoSeries
-            return gpd.GeoSeries(crs=crs)
-        else:
-            # create nodes gdf, buffer to passed-in distance, merge overlaps
-            gdf_nodes = utils_graph.graph_to_gdfs(G, edges=False)
-            merged_nodes = gdf_nodes.buffer(tolerance).unary_union
-            if isinstance(merged_nodes, Polygon):
-                # if only a single node results, make iterable to convert to GeoSeries
-                merged_nodes = [merged_nodes]
+    crs = G.graph["crs"]
+    if len(G) == 0:
+        # if graph has no nodes, just return empty GeoSeries
+        return gpd.GeoSeries(crs=crs)
+    # create nodes gdf, buffer to passed-in distance, merge overlaps
+    gdf_nodes = utils_graph.graph_to_gdfs(G, edges=False)
+    merged_nodes = gdf_nodes.buffer(tolerance).unary_union
+    if isinstance(merged_nodes, Polygon):
+        # if only a single node results, make iterable to convert to GeoSeries
+        merged_nodes = [merged_nodes]
 
-            # get the centroids of the merged intersection polygons
-            intersection_centroids = gpd.GeoSeries(list(merged_nodes), crs=crs).centroid
-            return intersection_centroids
+    return gpd.GeoSeries(list(merged_nodes), crs=crs).centroid
 
 
 def _consolidate_intersections_rebuild_graph(G, tolerance=10, reconnect_edges=True):
@@ -492,17 +478,13 @@ def _consolidate_intersections_rebuild_graph(G, tolerance=10, reconnect_edges=Tr
             # identify all the (weakly connected) component in cluster
             wccs = list(nx.weakly_connected_components(G.subgraph(nodes_subset.index)))
             if len(wccs) > 1:
-                # if there are multiple components in this cluster
-                suffix = 0
-                for wcc in wccs:
+                for suffix, wcc in enumerate(wccs):
                     # set subcluster xy to the centroid of just these nodes
                     subcluster_centroid = node_points.loc[wcc].unary_union.centroid
                     gdf.loc[wcc, "x"] = subcluster_centroid.x
                     gdf.loc[wcc, "y"] = subcluster_centroid.y
                     # move to subcluster by appending suffix to nodes cluster label
                     gdf.loc[wcc, "cluster"] = f"{cluster_label}-{suffix}"
-                    suffix += 1
-
     # STEP 4
     # create new empty graph and copy over misc graph data
     H = nx.MultiDiGraph()

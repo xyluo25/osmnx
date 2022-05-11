@@ -33,15 +33,17 @@ def geocode(query):
     params["q"] = query
     response_json = downloader.nominatim_request(params=params)
 
-    # if results were returned, parse lat and lng out of the result
-    if len(response_json) > 0 and "lat" in response_json[0] and "lon" in response_json[0]:
-        lat = float(response_json[0]["lat"])
-        lng = float(response_json[0]["lon"])
-        point = (lat, lng)
-        utils.log(f'Geocoded "{query}" to {point}')
-        return point
-    else:
+    if (
+        len(response_json) <= 0
+        or "lat" not in response_json[0]
+        or "lon" not in response_json[0]
+    ):
         raise Exception(f'Nominatim geocoder returned no results for query "{query}"')
+    lat = float(response_json[0]["lat"])
+    lng = float(response_json[0]["lon"])
+    point = (lat, lng)
+    utils.log(f'Geocoded "{query}" to {point}')
+    return point
 
 
 def geocode_to_gdf(query, which_result=None, buffer_dist=None):
@@ -129,11 +131,7 @@ def _geocode_query_to_gdf(query, which_result):
     gdf : geopandas.GeoDataFrame
         a GeoDataFrame with one row containing the result of geocoding
     """
-    if which_result is None:
-        limit = 50
-    else:
-        limit = which_result
-
+    limit = 50 if which_result is None else which_result
     results = downloader._osm_polygon_download(query, limit=limit)
 
     # choose the right result from the JSON response

@@ -71,14 +71,12 @@ def _round_polygon_coords(p, precision):
     new_exterior = [[round(x, precision) for x in c] for c in p.exterior.coords]
 
     # round the coordinates of the (possibly multiple, possibly none) Polygon interior(s)
-    new_interiors = []
-    for interior in p.interiors:
-        new_interiors.append([[round(x, precision) for x in c] for c in interior.coords])
+    new_interiors = [
+        [[round(x, precision) for x in c] for c in interior.coords]
+        for interior in p.interiors
+    ]
 
-    # construct a new Polygon with the rounded coordinates
-    # buffer by zero to clean self-touching or self-crossing polygons
-    new_poly = Polygon(shell=new_exterior, holes=new_interiors).buffer(0)
-    return new_poly
+    return Polygon(shell=new_exterior, holes=new_interiors).buffer(0)
 
 
 def _round_multipolygon_coords(mp, precision):
@@ -287,9 +285,9 @@ def _get_polygons_coordinates(geometry):
     # convert the exterior coordinates of the polygon(s) to the string format
     # the API expects
     polygon_coord_strs = []
+    separator = " "
     for coords in polygons_coords:
         s = ""
-        separator = " "
         for coord in list(coords):
             # round floating point lats and longs to 6 decimal places (ie, ~100 mm),
             # so we can hash and cache strings consistently

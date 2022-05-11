@@ -139,7 +139,7 @@ def test_routing():
 
     # give each node a random elevation then calculate edge grades
     randm = np.random.random(size=len(G))
-    elevs = {n: e for n, e in zip(G.nodes(), randm)}
+    elevs = dict(zip(G.nodes(), randm))
     nx.set_node_attributes(G, name="elevation", values=elevs)
     G = ox.add_edge_grades(G, add_absolute=True)
 

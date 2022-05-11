@@ -339,7 +339,7 @@ def plot_graph_routes(G, routes, route_colors="r", **pgr_kwargs):
         matplotlib figure, axis
     """
     # check for valid arguments
-    if not all([isinstance(r, list) for r in routes]):
+    if not all(isinstance(r, list) for r in routes):
         raise ValueError("routes must be a list of route lists")
     if len(routes) < 2:
         raise ValueError("You must pass more than 1 route")
@@ -491,15 +491,11 @@ def plot_figure_ground(
 
     if smooth_joints:
         # for each node, get a nodesize according to the narrowest incident edge
-        node_widths = dict()
+        node_widths = {}
         for node in Gu.nodes():
             # first, identify all the highway types of this node's incident edges
             ie_data = [Gu.get_edge_data(node, nbr) for nbr in Gu.neighbors(node)]
-            edge_types = [d[min(d)]["highway"] for d in ie_data]
-            if len(edge_types) < 1:
-                # if node has no incident edges, make size zero
-                node_widths[node] = 0
-            else:
+            if edge_types := [d[min(d)]["highway"] for d in ie_data]:
                 # flatten the list of edge types
                 et_flat = []
                 for et in edge_types:
@@ -521,6 +517,9 @@ def plot_figure_ground(
                 circle_area = circle_diameter ** 2
                 node_widths[node] = circle_area
 
+            else:
+                # if node has no incident edges, make size zero
+                node_widths[node] = 0
         # assign the node size to each node in the graph
         node_sizes = [node_widths[node] for node in Gu.nodes()]
     else:
@@ -709,7 +708,7 @@ def _save_and_show(fig, ax, save=False, show=True, close=True, filepath=None, dp
 
         # if save folder does not already exist, create it
         folder, _ = os.path.split(filepath)
-        if not folder == "" and not os.path.exists(folder):
+        if folder != "" and not os.path.exists(folder):
             os.makedirs(folder)
 
         # get the file extension and figure facecolor
